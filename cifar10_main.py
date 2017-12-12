@@ -86,7 +86,7 @@ if __name__ == '__main__':
 
     # model = Cifar10Model1().cuda()
     model = Cifar10Model2().cuda()
-    print list(model.parameters())
+    # print list(model.parameters())
     t = time.time()
     normal_loss, normal_acc = train(model, dataset, normal_grad, 0.1, True)
     print 'time:', time.time() - t

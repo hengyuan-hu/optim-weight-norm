@@ -103,13 +103,17 @@ class Split(nn.Module):
         super(Split, self).__init__()
         self.module = module
         self.add_bias = AddBias(module.bias.data)
-        self.add_wn = AddWn(module.g.data)
         self.module.bias = None
-        self.module.g = None
+
+        if hasattr(module, 'g'):
+            self.add_wn = AddWn(module.g.data)
+            self.module.g = None
 
     def forward(self, input):
         x = self.module(input)
-        x = self.add_wn(x)
+        if hasattr(self, 'add_wn'):
+            x = self.add_wn(x)
+
         x = self.add_bias(x)
         return x
 

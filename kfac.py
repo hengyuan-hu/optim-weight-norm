@@ -123,7 +123,7 @@ class KFACOptimizer(optim.Optimizer):
 
         super(KFACOptimizer, self).__init__(model.parameters(), defaults)
 
-        self.known_modules = {'Linear', 'Conv2d', 'AddBias'}
+        self.known_modules = {'Linear', 'Conv2d', 'AddBias', 'AddWn'}
 
         self.modules = []
         self.grad_outputs = {}

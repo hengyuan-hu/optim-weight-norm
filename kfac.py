@@ -27,6 +27,19 @@ class AddBias(nn.Module):
         return x + bias
 
 
+class AddWn(nn.Module):
+    def __init__(self, g):
+        super(AddWn, self).__init__()
+        self._g = nn.Parameter(g.unsqueeze(1))
+
+    def forward(self, x):
+        if x.dim() == 2:
+            g = self._g.t().view(1, -1)
+        else:
+            g = self._g.t().view(1, -1, 1, 1)
+        return x * g
+
+
 def _extract_patches(x, kernel_size, stride, padding):
     if padding[0] + padding[1] > 0:
         # Actually check dims
@@ -43,7 +56,7 @@ def _extract_patches(x, kernel_size, stride, padding):
 def compute_cov_a(a, classname, layer_info, fast_cnn):
     batch_size = a.size(0)
 
-    if classname == 'Conv2d':
+    if classname == 'Conv2d' or classname == 'WnConv2d':
         if fast_cnn:
             a = _extract_patches(a, *layer_info)
             a = a.view(a.size(0), -1, a.size(-1))
@@ -51,7 +64,7 @@ def compute_cov_a(a, classname, layer_info, fast_cnn):
         else:
             a = _extract_patches(a, *layer_info)
             a = a.view(-1, a.size(-1)).div_(a.size(1)).div_(a.size(2))
-    elif classname == 'AddBias':
+    elif classname == 'AddBias' or classname == 'AddWn':
         is_cuda = a.is_cuda
         a = torch.ones(a.size(0), 1)
         if is_cuda:
@@ -63,14 +76,14 @@ def compute_cov_a(a, classname, layer_info, fast_cnn):
 def compute_cov_g(g, classname, layer_info, fast_cnn):
     batch_size = g.size(0)
 
-    if classname == 'Conv2d':
+    if classname == 'Conv2d' or classname == 'WnConv2d':
         if fast_cnn:
             g = g.view(g.size(0), g.size(1), -1)
             g = g.sum(-1)
         else:
             g = g.transpose(1, 2).transpose(2, 3).contiguous()
             g = g.view(-1, g.size(-1)).mul_(g.size(1)).mul_(g.size(2))
-    elif classname == 'AddBias':
+    elif classname == 'AddBias' or classname == 'AddWn':
         g = g.view(g.size(0), g.size(1), -1)
         g = g.sum(-1)
 
@@ -85,15 +98,18 @@ def update_running_stat(aa, m_aa, momentum):
     m_aa *= (1 - momentum)
 
 
-class SplitBias(nn.Module):
+class Split(nn.Module):
     def __init__(self, module):
-        super(SplitBias, self).__init__()
+        super(Split, self).__init__()
         self.module = module
         self.add_bias = AddBias(module.bias.data)
+        self.add_wn = AddWn(module.g.data)
         self.module.bias = None
+        self.module.g = None
 
     def forward(self, input):
         x = self.module(input)
+        x = self.add_wn(x)
         x = self.add_bias(x)
         return x
 
@@ -112,14 +128,14 @@ class KFACOptimizer(optim.Optimizer):
                  Tf=10):
         defaults = dict()
 
-        def split_bias(module):
+        def split(module):
             for mname, child in module.named_children():
-                if hasattr(child, 'bias'):
-                    module._modules[mname] = SplitBias(child)
+                if hasattr(child, 'bias') or hasattr(child, 'g'):
+                    module._modules[mname] = split(child)
                 else:
-                    split_bias(child)
+                    split(child)
 
-        split_bias(model)
+        split(model)
 
         super(KFACOptimizer, self).__init__(model.parameters(), defaults)
 

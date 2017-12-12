@@ -56,7 +56,7 @@ def _extract_patches(x, kernel_size, stride, padding):
 def compute_cov_a(a, classname, layer_info, fast_cnn):
     batch_size = a.size(0)
 
-    if classname == 'Conv2d' or classname == 'WnConv2d':
+    if 'Conv2d' in classname:
         if fast_cnn:
             a = _extract_patches(a, *layer_info)
             a = a.view(a.size(0), -1, a.size(-1))
@@ -76,7 +76,7 @@ def compute_cov_a(a, classname, layer_info, fast_cnn):
 def compute_cov_g(g, classname, layer_info, fast_cnn):
     batch_size = g.size(0)
 
-    if classname == 'Conv2d' or classname == 'WnConv2d':
+    if 'Conv2d' in classname:
         if fast_cnn:
             g = g.view(g.size(0), g.size(1), -1)
             g = g.sum(-1)
@@ -143,7 +143,7 @@ class KFACOptimizer(optim.Optimizer):
 
         super(KFACOptimizer, self).__init__(model.parameters(), defaults)
 
-        self.known_modules = {'Linear', 'Conv2d', 'AddBias'}
+        self.known_modules = {'Linear', 'Conv2d', 'WnLinear', 'WnConv2d', 'AddBias', 'AddWn'}
 
         self.modules = []
         self.grad_outputs = {}
@@ -179,7 +179,7 @@ class KFACOptimizer(optim.Optimizer):
         if input[0].volatile == False and self.steps % self.Ts == 0:
             classname = module.__class__.__name__
             layer_info = None
-            if classname == 'Conv2d':
+            if 'Conv2d' in classname:
                 layer_info = (module.kernel_size, module.stride, module.padding)
 
             aa = compute_cov_a(input[0].data, classname, layer_info, self.fast_cnn)
@@ -194,7 +194,7 @@ class KFACOptimizer(optim.Optimizer):
         if self.acc_stats and self.steps % self.Ts == 0:
             classname = module.__class__.__name__
             layer_info = None
-            if classname == 'Conv2d':
+            if 'Conv2d' in classname:
                 layer_info = (module.kernel_size, module.stride, module.padding)
 
             gg = compute_cov_g(
@@ -211,7 +211,7 @@ class KFACOptimizer(optim.Optimizer):
             classname = module.__class__.__name__
             if classname in self.known_modules:
                 assert not (
-                    (classname in ['Linear', 'Conv2d'])
+                    (classname in ['Linear', 'Conv2d', 'WnLinear', 'WnConv2d'])
                     and module.bias is not None
                 ), "You must have a bias as a separate layer"
 
@@ -252,7 +252,7 @@ class KFACOptimizer(optim.Optimizer):
                 self.d_a[m].mul_((self.d_a[m] > 1e-6).float())
                 self.d_g[m].mul_((self.d_g[m] > 1e-6).float())
 
-            if classname == 'Conv2d':
+            if 'Conv2d' in classname:
                 p_grad_mat = p.grad.data.view(p.grad.data.size(0), -1)
             else:
                 p_grad_mat = p.grad.data

@@ -30,13 +30,15 @@ def newton_grad(loss, model):
     nn.utils.clip_grad_norm(gs, 1)
 
 
-def train(model, dataset, grad_func, lr):
+def train(model, dataset, grad_func, lr, kfac):
     batch_size = 100
     num_epochs = 20
     # optim = torch.optim.RMSprop(model.parameters(), lr)
-    optim = torch.optim.SGD(model.parameters(), lr)
-    # optim = KFACOptimizer(model)
-    optim.acc_stats = True
+    if kfac:
+        optim = KFACOptimizer(model)
+        optim.acc_stats = True
+    else:
+        optim = torch.optim.SGD(model.parameters(), lr)
 
     train_loss = np.zeros(num_epochs)
     test_acc = np.zeros(num_epochs)

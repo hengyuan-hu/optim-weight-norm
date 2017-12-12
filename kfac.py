@@ -131,7 +131,7 @@ class KFACOptimizer(optim.Optimizer):
         def split(module):
             for mname, child in module.named_children():
                 if hasattr(child, 'bias') or hasattr(child, 'g'):
-                    module._modules[mname] = split(child)
+                    module._modules[mname] = Split(child)
                 else:
                     split(child)
 

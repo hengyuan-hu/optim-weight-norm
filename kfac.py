@@ -257,6 +257,11 @@ class KFACOptimizer(optim.Optimizer):
             else:
                 p_grad_mat = p.grad.data
 
+            # print classname
+            # print p_grad_mat.size()
+            # print self.Q_a[m].size()
+            # print self.Q_g[m].t().size()
+
             v1 = torch.matmul(self.Q_g[m].t(), torch.matmul(p_grad_mat, self.Q_a[m]))
             v2 = v1 / (self.d_g[m].unsqueeze(1) * self.d_a[m].unsqueeze(0) + la)
             v = torch.matmul(self.Q_g[m], torch.matmul(v2, self.Q_a[m].t()))

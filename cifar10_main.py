@@ -15,9 +15,9 @@ class Cifar10Model1(nn.Module):
         super(Cifar10Model1, self).__init__()
 
         model = module.Sequential()
-        model.add_module('c1', module.WnConv2d(3, 32, 3, 2, 1))
+        model.add_module('c1', module.WnConv2d(3, 33, 3, 2, 1))
         model.add_module('relu1', nn.ReLU())
-        model.add_module('c2', module.WnConv2d(32, 64, 3, 2, 1))
+        model.add_module('c2', module.WnConv2d(33, 64, 3, 2, 1))
         model.add_module('relu2', nn.ReLU())
         model.add_module('l3', module.WnConv2d(64, 128, 3, 2, 1))
         model.add_module('relu3', nn.ReLU())
@@ -84,8 +84,8 @@ if __name__ == '__main__':
     # newton_loss, newton_acc = train(model, dataset, newton_grad, 0.1)
     # print 'time:', time.time() - t
 
-    # model = Cifar10Model1().cuda()
-    model = Cifar10Model2().cuda()
+    model = Cifar10Model1().cuda()
+    # model = Cifar10Model2().cuda()
     # print list(model.parameters())
     t = time.time()
     normal_loss, normal_acc = train(model, dataset, normal_grad, 0.1, True)

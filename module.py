@@ -11,7 +11,7 @@ class WnLinear(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self.weight = nn.Parameter(torch.Tensor(out_features, in_features))
-        self.g = nn.Parameter(torch.ones(1))
+        self.g = nn.Parameter(torch.ones(out_features))
 
         if bias:
             self.bias = nn.Parameter(torch.Tensor(out_features))
@@ -79,7 +79,7 @@ class WnConv2d(nn.Module):
         self.groups = groups
         self.weight = nn.Parameter(torch.Tensor(
             out_channels, in_channels // groups, *self.kernel_size))
-        self.g = nn.Parameter(torch.ones(1))
+        self.g = nn.Parameter(torch.ones(out_channels))
 
         if bias:
             self.bias = nn.Parameter(torch.Tensor(out_channels))

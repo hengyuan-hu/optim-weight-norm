@@ -5,6 +5,7 @@ import module
 from dataset_wrapper import MnistWrapper
 import module
 from kfac import KFACOptimizer
+import time
 
 
 def normal_grad(loss, model):
@@ -30,9 +31,8 @@ def newton_grad(loss, model):
     nn.utils.clip_grad_norm(gs, 1)
 
 
-def train(model, dataset, grad_func, lr, kfac):
+def train(model, dataset, grad_func, lr, kfac, num_epochs):
     batch_size = 100
-    num_epochs = 20
 
     if kfac:
         optim = KFACOptimizer(model)
@@ -41,8 +41,11 @@ def train(model, dataset, grad_func, lr, kfac):
         optim = torch.optim.SGD(model.parameters(), lr)
 
     train_loss = np.zeros(num_epochs)
+    train_acc = np.zeros(num_epochs)
     test_acc = np.zeros(num_epochs)
+    times = np.zeros(num_epochs)
 
+    t = time.time()
     for epoch in range(num_epochs):
         dataset.reset_and_shuffle(batch_size)
         losses = np.zeros(len(dataset))
@@ -60,11 +63,16 @@ def train(model, dataset, grad_func, lr, kfac):
             optim.zero_grad()
 
         train_loss[epoch] = losses.mean()
+        train_acc[epoch] = eval_(model, dataset.train_xs, dataset.train_ys)
         test_acc[epoch] = eval_(model, dataset.test_xs, dataset.test_ys)
+        times[epoch] = time.time() - t
         print 'epoch: %i, loss: %.4f' % (epoch+1, train_loss[epoch])
+        print 'accumulate time', times[epoch]
+        print 'train acc:', train_acc[epoch]
         print 'eval acc:', test_acc[epoch]
+        print '----------------'
 
-    return train_loss, test_acc
+    return train_loss, train_acc, test_acc, times
 
 
 def eval_(model, x, y):

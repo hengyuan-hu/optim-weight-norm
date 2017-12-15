@@ -33,9 +33,11 @@ class WnLinear(nn.Module):
         return self.g
 
     def forward(self, input):
-        normed_weight = self.weight / torch.norm(self.weight)
+        # print self.weight.size()
+        assert False
+        normed_weight = self.weight / torch.norm(self.weight, 2)
         if self.g is not None:
-            weight = normed_weight * self.g
+            weight = normed_weight * self.g.unsqueeze(1)
         else:
             weight = normed_weight
         return F.linear(input, weight, self.bias)
@@ -61,7 +63,6 @@ _single = _ntuple(1)
 _pair = _ntuple(2)
 _triple = _ntuple(3)
 _quadruple = _ntuple(4)
-
 
 
 class WnConv2d(nn.Module):
@@ -109,9 +110,16 @@ class WnConv2d(nn.Module):
         return self.g
 
     def forward(self, input):
-        normed_weight = self.weight / torch.norm(self.weight)
+        # print self.weight.size()
+        norms = torch.norm(self.weight.view(self.out_channels, -1), 2, 1)
+        norms = norms.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        # print 'norm:', norms.size()
+
+        normed_weight = self.weight / norms #torch.norm(self.weight)
         if self.g is not None:
-            weight = normed_weight * self.g
+            # print normed_weight.size()
+            # print self.g.unsqueeze(1).unsqueeze(2).size()
+            weight = normed_weight * self.g.unsqueeze(1).unsqueeze(2).unsqueeze(3)
         else:
             weight = normed_weight
         return F.conv2d(input, weight, self.bias, self.stride,

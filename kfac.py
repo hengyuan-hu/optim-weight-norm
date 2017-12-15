@@ -27,6 +27,19 @@ class AddBias(nn.Module):
         return x + bias
 
 
+class AddWn(nn.Module):
+    def __init__(self, g):
+        super(AddWn, self).__init__()
+        self._g = nn.Parameter(g.unsqueeze(1))
+
+    def forward(self, x):
+        if x.dim() == 2:
+            g = self._g.t().view(1, -1)
+        else:
+            g = self._g.t().view(1, -1, 1, 1)
+        return x * g
+
+
 def _extract_patches(x, kernel_size, stride, padding):
     if padding[0] + padding[1] > 0:
         # Actually check dims
@@ -43,7 +56,7 @@ def _extract_patches(x, kernel_size, stride, padding):
 def compute_cov_a(a, classname, layer_info, fast_cnn):
     batch_size = a.size(0)
 
-    if classname == 'Conv2d':
+    if 'Conv2d' in classname:
         if fast_cnn:
             a = _extract_patches(a, *layer_info)
             a = a.view(a.size(0), -1, a.size(-1))
@@ -51,7 +64,7 @@ def compute_cov_a(a, classname, layer_info, fast_cnn):
         else:
             a = _extract_patches(a, *layer_info)
             a = a.view(-1, a.size(-1)).div_(a.size(1)).div_(a.size(2))
-    elif classname == 'AddBias':
+    elif classname == 'AddBias' or classname == 'AddWn':
         is_cuda = a.is_cuda
         a = torch.ones(a.size(0), 1)
         if is_cuda:
@@ -63,14 +76,14 @@ def compute_cov_a(a, classname, layer_info, fast_cnn):
 def compute_cov_g(g, classname, layer_info, fast_cnn):
     batch_size = g.size(0)
 
-    if classname == 'Conv2d':
+    if 'Conv2d' in classname:
         if fast_cnn:
             g = g.view(g.size(0), g.size(1), -1)
             g = g.sum(-1)
         else:
             g = g.transpose(1, 2).transpose(2, 3).contiguous()
             g = g.view(-1, g.size(-1)).mul_(g.size(1)).mul_(g.size(2))
-    elif classname == 'AddBias':
+    elif classname == 'AddBias' or classname == 'AddWn':
         g = g.view(g.size(0), g.size(1), -1)
         g = g.sum(-1)
 
@@ -85,15 +98,22 @@ def update_running_stat(aa, m_aa, momentum):
     m_aa *= (1 - momentum)
 
 
-class SplitBias(nn.Module):
+class Split(nn.Module):
     def __init__(self, module):
-        super(SplitBias, self).__init__()
+        super(Split, self).__init__()
         self.module = module
         self.add_bias = AddBias(module.bias.data)
         self.module.bias = None
 
+        if hasattr(module, 'g'):
+            self.add_wn = AddWn(module.g.data)
+            self.module.g = None
+
     def forward(self, input):
         x = self.module(input)
+        if hasattr(self, 'add_wn'):
+            x = self.add_wn(x)
+
         x = self.add_bias(x)
         return x
 
@@ -112,18 +132,22 @@ class KFACOptimizer(optim.Optimizer):
                  Tf=10):
         defaults = dict()
 
-        def split_bias(module):
+        def split(module):
             for mname, child in module.named_children():
-                if hasattr(child, 'bias'):
-                    module._modules[mname] = SplitBias(child)
+                if hasattr(child, 'bias') or hasattr(child, 'g'):
+                    module._modules[mname] = Split(child)
                 else:
-                    split_bias(child)
+                    split(child)
 
-        split_bias(model)
+        split(model)
 
         super(KFACOptimizer, self).__init__(model.parameters(), defaults)
 
+<<<<<<< HEAD
         self.known_modules = {'Linear', 'Conv2d', 'AddBias', 'AddWn'}
+=======
+        self.known_modules = {'Linear', 'Conv2d', 'WnLinear', 'WnConv2d', 'AddBias', 'AddWn'}
+>>>>>>> wn-kfac
 
         self.modules = []
         self.grad_outputs = {}
@@ -159,7 +183,7 @@ class KFACOptimizer(optim.Optimizer):
         if input[0].volatile == False and self.steps % self.Ts == 0:
             classname = module.__class__.__name__
             layer_info = None
-            if classname == 'Conv2d':
+            if 'Conv2d' in classname:
                 layer_info = (module.kernel_size, module.stride, module.padding)
 
             aa = compute_cov_a(input[0].data, classname, layer_info, self.fast_cnn)
@@ -174,7 +198,7 @@ class KFACOptimizer(optim.Optimizer):
         if self.acc_stats and self.steps % self.Ts == 0:
             classname = module.__class__.__name__
             layer_info = None
-            if classname == 'Conv2d':
+            if 'Conv2d' in classname:
                 layer_info = (module.kernel_size, module.stride, module.padding)
 
             gg = compute_cov_g(
@@ -191,7 +215,7 @@ class KFACOptimizer(optim.Optimizer):
             classname = module.__class__.__name__
             if classname in self.known_modules:
                 assert not (
-                    (classname in ['Linear', 'Conv2d'])
+                    (classname in ['Linear', 'Conv2d', 'WnLinear', 'WnConv2d'])
                     and module.bias is not None
                 ), "You must have a bias as a separate layer"
 
@@ -232,10 +256,15 @@ class KFACOptimizer(optim.Optimizer):
                 self.d_a[m].mul_((self.d_a[m] > 1e-6).float())
                 self.d_g[m].mul_((self.d_g[m] > 1e-6).float())
 
-            if classname == 'Conv2d':
+            if 'Conv2d' in classname:
                 p_grad_mat = p.grad.data.view(p.grad.data.size(0), -1)
             else:
                 p_grad_mat = p.grad.data
+
+            # print classname
+            # print p_grad_mat.size()
+            # print self.Q_a[m].size()
+            # print self.Q_g[m].t().size()
 
             v1 = torch.matmul(self.Q_g[m].t(), torch.matmul(p_grad_mat, self.Q_a[m]))
             v2 = v1 / (self.d_g[m].unsqueeze(1) * self.d_a[m].unsqueeze(0) + la)

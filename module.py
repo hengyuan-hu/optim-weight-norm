@@ -11,7 +11,7 @@ class WnLinear(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self.weight = nn.Parameter(torch.Tensor(out_features, in_features))
-        self.g = nn.Parameter(torch.ones(1))
+        self.g = nn.Parameter(torch.ones(out_features))
 
         if bias:
             self.bias = nn.Parameter(torch.Tensor(out_features))
@@ -33,8 +33,13 @@ class WnLinear(nn.Module):
         return self.g
 
     def forward(self, input):
-        normed_weight = self.weight / torch.norm(self.weight)
-        weight = normed_weight * self.g
+        # print self.weight.size()
+        assert False
+        normed_weight = self.weight / torch.norm(self.weight, 2)
+        if self.g is not None:
+            weight = normed_weight * self.g.unsqueeze(1)
+        else:
+            weight = normed_weight
         return F.linear(input, weight, self.bias)
 
     def __repr__(self):
@@ -60,7 +65,6 @@ _triple = _ntuple(3)
 _quadruple = _ntuple(4)
 
 
-
 class WnConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1, bias=True):
@@ -76,7 +80,7 @@ class WnConv2d(nn.Module):
         self.groups = groups
         self.weight = nn.Parameter(torch.Tensor(
             out_channels, in_channels // groups, *self.kernel_size))
-        self.g = nn.Parameter(torch.ones(1))
+        self.g = nn.Parameter(torch.ones(out_channels))
 
         if bias:
             self.bias = nn.Parameter(torch.Tensor(out_channels))
@@ -106,8 +110,18 @@ class WnConv2d(nn.Module):
         return self.g
 
     def forward(self, input):
-        normed_weight = self.weight / torch.norm(self.weight)
-        weight = normed_weight * self.g
+        # print self.weight.size()
+        norms = torch.norm(self.weight.view(self.out_channels, -1), 2, 1)
+        norms = norms.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        # print 'norm:', norms.size()
+
+        normed_weight = self.weight / norms #torch.norm(self.weight)
+        if self.g is not None:
+            # print normed_weight.size()
+            # print self.g.unsqueeze(1).unsqueeze(2).size()
+            weight = normed_weight * self.g.unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        else:
+            weight = normed_weight
         return F.conv2d(input, weight, self.bias, self.stride,
                         self.padding, self.dilation, self.groups)
 

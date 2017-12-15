@@ -15,15 +15,17 @@ class Cifar10Model1(nn.Module):
         super(Cifar10Model1, self).__init__()
 
         model = module.Sequential()
-        model.add_module('c1', module.WnConv2d(3, 32, 3, 2, 1))
+        model.add_module('c1', module.WnConv2d(3, 33, 3, 2, 1))
         model.add_module('relu1', nn.ReLU())
-        model.add_module('c2', module.WnConv2d(32, 64, 3, 2, 1))
+        model.add_module('c2', module.WnConv2d(33, 64, 3, 2, 1))
         model.add_module('relu2', nn.ReLU())
         model.add_module('l3', module.WnConv2d(64, 128, 3, 2, 1))
         model.add_module('relu3', nn.ReLU())
         model.add_module('avg_pool', nn.AvgPool2d(4))
+        # model.add_module('dropout', nn.Dropout(0.2))
         self.main = model
-        self.fc = module.WnLinear(128, 10)
+        # self.fc = module.WnLinear(128, 10)
+        self.fc = nn.Linear(128, 10)
 
     def get_param_g(self):
         return self.main.get_param_g() + [self.fc.get_param_g()]
@@ -46,6 +48,7 @@ class Cifar10Model2(nn.Module):
         model.add_module('l3', nn.Conv2d(64, 128, 3, 2, 1))
         model.add_module('relu3', nn.ReLU())
         model.add_module('avg_pool', nn.AvgPool2d(4))
+        # model.add_module('dropout', nn.Dropout(0.2))
         self.main = model
         self.fc = nn.Linear(128, 10)
 
@@ -84,10 +87,12 @@ if __name__ == '__main__':
     # newton_loss, newton_acc = train(model, dataset, newton_grad, 0.1)
     # print 'time:', time.time() - t
 
-    # model = Cifar10Model1().cuda()
-    model = Cifar10Model2().cuda()
+    model = Cifar10Model1().cuda()
+    # model = Cifar10Model2().cuda()
+    # print list(model.parameters())
     t = time.time()
-    normal_loss, normal_acc = train(model, dataset, normal_grad, 0.1, True)
+    train_loss, train_acc, test_acc, times = train(
+        model, dataset, normal_grad, 0.1, True, 40)
     print 'time:', time.time() - t
 
     # x = range(len(newton_loss))
